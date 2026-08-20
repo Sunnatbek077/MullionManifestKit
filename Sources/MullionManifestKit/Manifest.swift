@@ -1,9 +1,9 @@
 //
 //  Manifest.swift
-//  VoltManifestKit
+//  MullionManifestKit
 //
-//  The exact JSON shape of manifest.json in Sunnatbek077/volt-runtime —
-//  written by Volt-Admin, read by Volt. This package is the only definition
+//  The exact JSON shape of manifest.json in Sunnatbek077/mullion-runtime —
+//  written by Mullion-Admin, read by Mullion. This package is the only definition
 //  of that wire format; neither app may model it independently.
 //
 //  Evolution rules:
@@ -13,7 +13,7 @@
 //    `currentSchemaVersion`. `Manifest.decode(from:)` refuses payloads newer
 //    than it supports, so an outdated app fails with a clear "update
 //    required" error instead of silently mis-reading (or, worse for
-//    Volt-Admin, overwriting) data it doesn't understand.
+//    Mullion-Admin, overwriting) data it doesn't understand.
 //
 
 import Foundation
@@ -64,7 +64,7 @@ public enum ManifestSchemaError: Error, LocalizedError, Sendable {
     /// The payload declares a schema newer than this binary understands.
     /// The only safe reaction is "update the app" — decoding anyway risks
     /// silently dropping data (client) or clobbering it on the next PUT
-    /// (Volt-Admin).
+    /// (Mullion-Admin).
     case unsupportedSchemaVersion(found: Int, supported: Int)
 
     public var errorDescription: String? {
@@ -147,7 +147,7 @@ extension Manifest {
         public var icon: String
         public var categoryId: UUID
         /// Raw byte count of the file. The JSON key is `sizeMB` for
-        /// historical reasons — Volt-Admin always populated it with bytes
+        /// historical reasons — Mullion-Admin always populated it with bytes
         /// (upload API size / Content-Length), and shipped clients already
         /// read it that way, so the *name* is fixed here instead of the wire.
         public var sizeBytes: Int

@@ -1,9 +1,9 @@
 //
 //  AppContent.swift
-//  VoltManifestKit
+//  MullionManifestKit
 //
 //  Two documents published alongside `manifest.json` in the same
-//  `volt-runtime` repo, written by Volt-Admin and read by Volt:
+//  `mullion-runtime` repo, written by Mullion-Admin and read by Mullion:
 //
 //  - `news.json`      — the client's News tab
 //  - `app-config.json` — support and community links
@@ -87,7 +87,7 @@ public struct NewsItem: Identifiable, Codable, Sendable, Hashable {
     /// Tolerant on everything that isn't load-bearing:
     ///
     /// - An **unknown `category`** becomes `.announcement` rather than
-    ///   throwing, so publishing a new category from a newer Volt-Admin
+    ///   throwing, so publishing a new category from a newer Mullion-Admin
     ///   doesn't blank the feed on every client that shipped before it.
     /// - **`url` and `imageURL` are trusted only when `http`/`https`.** The
     ///   admin tool can leave a local `file://` path behind — the same trap
@@ -105,8 +105,8 @@ public struct NewsItem: Identifiable, Codable, Sendable, Hashable {
         let rawCategory = try container.decodeIfPresent(String.self, forKey: .category)
         category = rawCategory.flatMap(Category.init(rawValue:)) ?? .announcement
 
-        url = try container.decodeIfPresent(String.self, forKey: .url).flatMap(VoltURL.trusted(from:))
-        imageURL = try container.decodeIfPresent(String.self, forKey: .imageURL).flatMap(VoltURL.trusted(from:))
+        url = try container.decodeIfPresent(String.self, forKey: .url).flatMap(MullionURL.trusted(from:))
+        imageURL = try container.decodeIfPresent(String.self, forKey: .imageURL).flatMap(MullionURL.trusted(from:))
         minAppVersion = try container.decodeIfPresent(String.self, forKey: .minAppVersion)
     }
 }
@@ -195,7 +195,7 @@ public struct AppConfig: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         func link(_ key: CodingKeys) throws -> URL? {
-            try container.decodeIfPresent(String.self, forKey: key).flatMap(VoltURL.trusted(from:))
+            try container.decodeIfPresent(String.self, forKey: key).flatMap(MullionURL.trusted(from:))
         }
         feedbackRepositoryURL = try link(.feedbackRepositoryURL)
         discussionsURL = try link(.discussionsURL)
@@ -218,7 +218,7 @@ public struct AppConfig: Codable, Sendable, Equatable {
 
 // MARK: - Shared helpers
 
-public enum VoltURL {
+public enum MullionURL {
     /// A URL only counts if it's `http`/`https`.
     ///
     /// The manifest side of this system already learned this twice: a leading
