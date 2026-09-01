@@ -261,11 +261,46 @@ extension Manifest {
             public var multiplayer: Bool
             public var antiCheat: String?
 
-            public init(directx: DirectXVersion, windowsVersion: WindowsVersion, multiplayer: Bool, antiCheat: String?) {
+            /// Which DirectX→Metal translation layer this title was tested on,
+            /// or `nil` for "not established".
+            ///
+            /// **Optional, and the optionality is the point.** Absent means the
+            /// admin has no measurement to publish, and the client keeps
+            /// whatever the prefix is already set to. Defaulting it to
+            /// `d3dmetal` on decode would turn "nobody checked" into "we
+            /// recommend D3DMetal", which is the same claim-without-a-check
+            /// both consumers keep having to correct. Unlike `directx` — which
+            /// is recorded metadata nothing branches on — this one really does
+            /// change how the game launches, so it must not be guessed.
+            public var graphicsBackend: GraphicsBackend?
+
+            public init(
+                directx: DirectXVersion,
+                windowsVersion: WindowsVersion,
+                multiplayer: Bool,
+                antiCheat: String?,
+                graphicsBackend: GraphicsBackend? = nil
+            ) {
                 self.directx = directx
                 self.windowsVersion = windowsVersion
                 self.multiplayer = multiplayer
                 self.antiCheat = antiCheat
+                self.graphicsBackend = graphicsBackend
+            }
+
+            /// Hand-written so `graphicsBackend` can be added without
+            /// invalidating every manifest already published: synthesized
+            /// decoding of a new property is tolerant only for optionals, and
+            /// this file is the one place that promise should be visible.
+            /// The three original fields stay strict — a settings block missing
+            /// its DirectX or Windows version is malformed, not sparse.
+            public init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                directx = try container.decode(DirectXVersion.self, forKey: .directx)
+                windowsVersion = try container.decode(WindowsVersion.self, forKey: .windowsVersion)
+                multiplayer = try container.decode(Bool.self, forKey: .multiplayer)
+                antiCheat = try container.decodeIfPresent(String.self, forKey: .antiCheat)
+                graphicsBackend = try container.decodeIfPresent(GraphicsBackend.self, forKey: .graphicsBackend)
             }
 
             public enum DirectXVersion: String, Sendable, Codable, CaseIterable, Hashable {
@@ -278,6 +313,32 @@ extension Manifest {
             public enum WindowsVersion: String, Sendable, Codable, CaseIterable, Hashable {
                 case win10 = "win10"
                 case win11 = "win11"
+            }
+
+            /// The raw values are the ones the engine itself reads: they are
+            /// written verbatim to `CX_GRAPHICS_BACKEND` /
+            /// `CX_ACTIVE_GRAPHICS_BACKEND` by the client, and they are
+            /// contractually identical to `MullionCore.GraphicsBackend`'s.
+            /// Changing one without the other silently stops a published
+            /// recommendation from being applied.
+            ///
+            /// Adding a case here is a **schema bump**, not a free change —
+            /// an older client decodes an unknown case as a decoding failure
+            /// for the whole game entry, so `Manifest.currentSchemaVersion`
+            /// has to move with it. Adding this whole optional field did not,
+            /// because an absent key is what every existing manifest has.
+            public enum GraphicsBackend: String, Sendable, Codable, CaseIterable, Hashable {
+                case d3dMetal = "d3dmetal"
+                case dxmt = "dxmt"
+                case dxvk = "dxvk"
+
+                public var displayName: String {
+                    switch self {
+                    case .d3dMetal: "D3DMetal"
+                    case .dxmt: "DXMT"
+                    case .dxvk: "DXVK"
+                    }
+                }
             }
         }
 
