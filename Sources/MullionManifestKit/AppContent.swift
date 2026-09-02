@@ -5,8 +5,9 @@
 //  Two documents published alongside `manifest.json` in the same
 //  `mullion-runtime` repo, written by Mullion-Admin and read by Mullion:
 //
-//  - `news.json`      — the client's News tab
+//  - `news.json`       — the client's News tab
 //  - `app-config.json` — support and community links
+//  - `update.json`     — the newest published build of Mullion itself
 //
 //  They live here for the same reason `Manifest` does: both sides need the
 //  identical shape, and every real cross-repo bug in this system traced back
@@ -209,6 +210,145 @@ public struct AppConfig: Codable, Sendable, Equatable {
 
     public static func decode(from data: Data) throws -> AppConfig {
         try Manifest.decoder().decode(AppConfig.self, from: data)
+    }
+
+    public func encoded() throws -> Data {
+        try Manifest.encoder().encode(self)
+    }
+}
+
+// MARK: - App updates
+
+/// One published build of Mullion, as `update.json` describes it.
+///
+/// **What the client does with this is deliberately small: it tells the user a
+/// newer build exists and opens `downloadURL`.** Mullion installs nothing over
+/// itself — there is no updater, no signed appcast and no relaunch — so this
+/// document describes a release, it does not authorise one. Anything that
+/// looked like an installer contract (a checksum, a signature, a delta) is
+/// absent on purpose rather than published and ignored.
+public struct AppRelease: Codable, Sendable, Equatable {
+
+    /// `CFBundleShortVersionString` of the published build — "0.86". Compared
+    /// against the running app's own by the client.
+    public var version: String
+
+    /// `CFBundleVersion`, when the release bumped it. Optional because a
+    /// project that never touches its build counter would otherwise have to
+    /// publish a number that means nothing; the client falls back to comparing
+    /// `version` alone.
+    public var build: String?
+
+    /// Where the user is sent. **Required in practice**: a release with no
+    /// download is a claim with no action behind it, so `UpdateDocument` drops
+    /// one whose URL is missing or isn't `http`/`https`.
+    public var downloadURL: URL
+
+    /// A short line for the update row — "Fixes the Storage card's buttons."
+    /// Long-form notes belong in News, which is already a reader for exactly
+    /// that; this is the sentence that fits beside a Download button.
+    public var notes: String?
+
+    public var publishedAt: Date?
+
+    /// The macOS version this build needs, as `ProcessInfo` states one —
+    /// "27.0", "27.1". Present so a Mac that **cannot run** the new build is
+    /// not told to go and fetch it: the client compares and stays quiet.
+    /// Absent means "no newer requirement than the build already running".
+    public var minimumSystemVersion: String?
+
+    public init(
+        version: String,
+        build: String? = nil,
+        downloadURL: URL,
+        notes: String? = nil,
+        publishedAt: Date? = nil,
+        minimumSystemVersion: String? = nil
+    ) {
+        self.version = version
+        self.build = build
+        self.downloadURL = downloadURL
+        self.notes = notes
+        self.publishedAt = publishedAt
+        self.minimumSystemVersion = minimumSystemVersion
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case version, build, downloadURL, notes, publishedAt, minimumSystemVersion
+    }
+
+    /// `version` and a trusted `downloadURL` are the two fields without which
+    /// there is nothing to say, so their absence throws and `UpdateDocument`
+    /// turns that into "nothing published" rather than into an error the user
+    /// sees. `downloadURL` gets the same `http`/`https` check every other link
+    /// in this file gets — the admin tool can leave a `file://` path behind,
+    /// and this one is handed straight to the system opener.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        let rawVersion = try container.decode(String.self, forKey: .version)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rawVersion.isEmpty else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .version, in: container, debugDescription: "empty version"
+            )
+        }
+        version = rawVersion
+
+        let rawDownload = try container.decode(String.self, forKey: .downloadURL)
+        guard let url = MullionURL.trusted(from: rawDownload) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .downloadURL, in: container,
+                debugDescription: "downloadURL must be http or https"
+            )
+        }
+        downloadURL = url
+
+        func text(_ key: CodingKeys) throws -> String? {
+            let raw = try container.decodeIfPresent(String.self, forKey: key)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return (raw?.isEmpty == false) ? raw : nil
+        }
+        build = try text(.build)
+        notes = try text(.notes)
+        minimumSystemVersion = try text(.minimumSystemVersion)
+        publishedAt = try container.decodeIfPresent(Date.self, forKey: .publishedAt)
+    }
+}
+
+/// The `update.json` document — the newest build Mullion-Admin has published.
+///
+/// **`latest` is optional and an empty document is the normal early state**,
+/// exactly as `news.json`'s 404 is: nothing published yet means the client
+/// says "you're up to date", never "update check failed". Unpublishing is
+/// therefore possible without deleting the file — clear `latest` and every
+/// client stops offering the build, which is the only recall mechanism a
+/// system with no updater has.
+///
+/// A `latest` that fails to decode is treated the same way, through
+/// `Failable`: a typo in a release entry must not turn into an error banner on
+/// a screen the user opened to read their disk usage.
+public struct UpdateDocument: Codable, Sendable, Equatable {
+    public var latest: AppRelease?
+
+    public init(latest: AppRelease? = nil) {
+        self.latest = latest
+    }
+
+    private enum CodingKeys: String, CodingKey { case latest }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        latest = try container.decodeIfPresent(Failable<AppRelease>.self, forKey: .latest)?.value
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(latest, forKey: .latest)
+    }
+
+    public static func decode(from data: Data) throws -> UpdateDocument {
+        try Manifest.decoder().decode(UpdateDocument.self, from: data)
     }
 
     public func encoded() throws -> Data {
